@@ -1,12 +1,44 @@
 import {
   collection, doc, getDocs, setDoc, deleteDoc,
-  updateDoc, writeBatch, query, orderBy,
+  updateDoc, writeBatch, query, orderBy, getDoc,
 } from 'firebase/firestore'
 import { db } from './firebase'
 import type { Mission } from './types'
 
 const missionsCol = (uid: string) => collection(db, 'users', uid, 'missions')
 const missionDoc  = (uid: string, id: string) => doc(db, 'users', uid, 'missions', id)
+
+// ── Friends ───────────────────────────────────────────────────────────────────
+
+export interface FriendRecord {
+  uid: string
+  name: string
+  addedAt: string
+}
+
+export async function getFriends(uid: string): Promise<FriendRecord[]> {
+  const snap = await getDocs(collection(db, 'users', uid, 'friends'))
+  return snap.docs.map(d => d.data() as FriendRecord)
+}
+
+export async function addFriend(myUid: string, theirUid: string): Promise<void> {
+  const profile = await getUserProfile(theirUid)
+  if (!profile) throw new Error('User not found')
+  await setDoc(doc(db, 'users', myUid, 'friends', theirUid), {
+    uid: theirUid,
+    name: profile.name,
+    addedAt: new Date().toISOString(),
+  })
+}
+
+export async function removeFriend(myUid: string, theirUid: string): Promise<void> {
+  await deleteDoc(doc(db, 'users', myUid, 'friends', theirUid))
+}
+
+export async function isFriend(myUid: string, theirUid: string): Promise<boolean> {
+  const snap = await getDoc(doc(db, 'users', myUid, 'friends', theirUid))
+  return snap.exists()
+}
 
 // ── Read ──────────────────────────────────────────────────────────────────────
 
@@ -80,7 +112,6 @@ export async function saveUserProfile(uid: string, name: string, email: string):
 }
 
 export async function getUserProfile(uid: string): Promise<{ name: string; email: string; createdAt: string } | null> {
-  const { getDoc } = await import('firebase/firestore')
   const snap = await getDoc(doc(db, 'users', uid))
   return snap.exists() ? (snap.data() as { name: string; email: string; createdAt: string }) : null
 }
