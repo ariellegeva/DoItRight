@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { Sparkles, ArrowRight } from 'lucide-react'
 import {
   createUserWithEmailAndPassword,
@@ -14,6 +14,8 @@ import { useAuth } from '@/context/AuthContext'
 
 export default function LoginPage() {
   const router         = useRouter()
+  const searchParams   = useSearchParams()
+  const redirect       = searchParams.get('redirect') ?? '/'
   const { user, loading } = useAuth()
   const [isSignUp, setIsSignUp] = useState(true)
   const [name, setName]         = useState('')
@@ -23,8 +25,8 @@ export default function LoginPage() {
   const [submitting, setSubmitting] = useState(false)
 
   useEffect(() => {
-    if (!loading && user) router.replace('/')
-  }, [user, loading, router])
+    if (!loading && user) router.replace(redirect)
+  }, [user, loading, router, redirect])
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -42,7 +44,7 @@ export default function LoginPage() {
       } else {
         await signInWithEmailAndPassword(auth, email.trim(), password)
       }
-      router.replace('/')
+      router.replace(redirect)
     } catch (err: unknown) {
       const code = (err as { code?: string }).code ?? ''
       if (code === 'auth/email-already-in-use') setError('Account already exists — try signing in.')

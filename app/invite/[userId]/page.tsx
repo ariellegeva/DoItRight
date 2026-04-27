@@ -20,10 +20,12 @@ export default function InvitePage() {
 
   useEffect(() => {
     if (!theirUid) return
-    getUserProfile(theirUid).then(p => {
-      if (!p) { setNotFound(true); return }
-      setProfile(p)
-    })
+    getUserProfile(theirUid)
+      .then(p => {
+        if (!p) { setNotFound(true); return }
+        setProfile(p)
+      })
+      .catch(() => setNotFound(true))
   }, [theirUid])
 
   useEffect(() => {
@@ -32,7 +34,10 @@ export default function InvitePage() {
   }, [user, theirUid])
 
   async function handleAdd() {
-    if (!user) { router.push('/login'); return }
+    if (!user) {
+      router.push(`/login?redirect=/invite/${theirUid}`)
+      return
+    }
     if (theirUid === user.uid) return
     setAdding(true)
     try {
@@ -44,12 +49,18 @@ export default function InvitePage() {
     }
   }
 
-  if (loading || !profile) {
+  if (notFound) {
     return (
       <main className="min-h-screen flex items-center justify-center" style={{ background: '#020617' }}>
-        {notFound
-          ? <p className="text-slate-500 font-semibold">Invite link not found.</p>
-          : <div className="w-8 h-8 rounded-full border-2 border-ice-400/30 border-t-ice-400 animate-spin" />}
+        <p className="text-slate-500 font-semibold">Invite link not found.</p>
+      </main>
+    )
+  }
+
+  if (!profile) {
+    return (
+      <main className="min-h-screen flex items-center justify-center" style={{ background: '#020617' }}>
+        <div className="w-8 h-8 rounded-full border-2 border-ice-400/30 border-t-ice-400 animate-spin" />
       </main>
     )
   }
@@ -96,9 +107,9 @@ export default function InvitePage() {
           </button>
         )}
 
-        {!user && (
-          <p className="text-xs text-slate-600 font-semibold mb-4">
-            You need to <button onClick={() => router.push('/login')} className="text-ice-400 underline">sign in</button> first
+        {!user && !isSelf && (
+          <p className="text-xs text-slate-500 font-semibold mb-4">
+            Tapping "Add" will take you to sign in first
           </p>
         )}
 
