@@ -14,5 +14,17 @@ service cloud.firestore {
         allow read, write: if request.auth != null && request.auth.uid == userId;
       }
     }
+
+    match /chats/{chatId} {
+      // chatId is uid1_uid2 (sorted). Both participants can access.
+      allow read: if request.auth != null && request.auth.uid in chatId.split('_');
+
+      match /messages/{messageId} {
+        allow read: if request.auth != null && request.auth.uid in chatId.split('_');
+        allow create: if request.auth != null
+                      && request.auth.uid in chatId.split('_')
+                      && request.resource.data.senderUid == request.auth.uid;
+      }
+    }
   }
 }

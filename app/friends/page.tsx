@@ -2,10 +2,10 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { Users, MessageCircle, Flame, Link, Check } from 'lucide-react'
+import { Users, MessageCircle, Link, Check } from 'lucide-react'
 import BottomNav from '@/components/BottomNav'
 import { useAuth } from '@/context/AuthContext'
-import { getFriends, removeFriend, type FriendRecord } from '@/lib/firestore'
+import { getFriends, removeFriend, getChatId, type FriendRecord } from '@/lib/firestore'
 
 export default function FriendsPage() {
   const router = useRouter()
@@ -96,9 +96,10 @@ export default function FriendsPage() {
                   </p>
                 </div>
                 <div className="flex gap-2">
-                  <button className="flex items-center gap-1 px-3 py-2 rounded-xl text-xs font-bold border border-slate-700/50 text-slate-600 relative cursor-not-allowed">
+                  <button
+                    onClick={() => router.push(`/messages/${getChatId(user!.uid, friend.uid)}`)}
+                    className="flex items-center gap-1 px-3 py-2 rounded-xl text-xs font-bold border border-slate-700/50 text-slate-500 hover:text-ice-400 hover:border-ice-400/30 hover:bg-ice-400/10 transition-all">
                     <MessageCircle size={12} />
-                    <span className="absolute -top-2 -right-1 bg-ice-600 text-[8px] font-black px-1.5 py-0.5 rounded-full text-white">SOON</span>
                   </button>
                   <button onClick={() => handleRemove(friend.uid)}
                           className="px-3 py-2 rounded-xl text-xs font-bold text-red-400/60 hover:text-red-400 hover:bg-red-400/10 transition-all border border-transparent hover:border-red-400/20">

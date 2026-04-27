@@ -1,6 +1,7 @@
 import {
   collection, doc, getDocs, setDoc, deleteDoc,
   updateDoc, writeBatch, query, orderBy, getDoc,
+  addDoc, serverTimestamp, onSnapshot, type Unsubscribe,
 } from 'firebase/firestore'
 import { db } from './firebase'
 import type { Mission } from './types'
@@ -38,6 +39,44 @@ export async function removeFriend(myUid: string, theirUid: string): Promise<voi
 export async function isFriend(myUid: string, theirUid: string): Promise<boolean> {
   const snap = await getDoc(doc(db, 'users', myUid, 'friends', theirUid))
   return snap.exists()
+}
+
+// ── Messaging ─────────────────────────────────────────────────────────────────
+
+export interface ChatMessage {
+  id: string
+  senderUid: string
+  senderName: string
+  text: string
+  createdAt: number
+}
+
+export function getChatId(uid1: string, uid2: string): string {
+  return [uid1, uid2].sort().join('_')
+}
+
+export function subscribeToMessages(
+  chatId: string,
+  callback: (msgs: ChatMessage[]) => void,
+): Unsubscribe {
+  const q = query(collection(db, 'chats', chatId, 'messages'), orderBy('createdAt'))
+  return onSnapshot(q, snap => {
+    callback(snap.docs.map(d => ({ id: d.id, ...d.data() } as ChatMessage)))
+  })
+}
+
+export async function sendMessage(
+  chatId: string,
+  senderUid: string,
+  senderName: string,
+  text: string,
+): Promise<void> {
+  await addDoc(collection(db, 'chats', chatId, 'messages'), {
+    senderUid,
+    senderName,
+    text,
+    createdAt: serverTimestamp(),
+  })
 }
 
 // ── Read ──────────────────────────────────────────────────────────────────────
