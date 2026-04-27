@@ -39,11 +39,13 @@ function stripMissionLines(text: string): string {
 }
 
 export default function ChatModal({ mode, initialMissions = [], onClose, onMissionsAdded }: Props) {
+  const seedMissions: ParsedMission[] = initialMissions.map(m => ({ id: m.id, emoji: m.emoji, text: m.text }))
+
   const [messages, setMessages]             = useState<(ChatMessage & { id: string })[]>([])
   const [input, setInput]                   = useState('')
   const [isStreaming, setIsStreaming]       = useState(false)
-  const [latestMissions, setLatestMissions] = useState<ParsedMission[]>([])
-  const [selectedIds, setSelectedIds]       = useState<Set<string>>(new Set())
+  const [latestMissions, setLatestMissions] = useState<ParsedMission[]>(mode === 'edit' ? seedMissions : [])
+  const [selectedIds, setSelectedIds]       = useState<Set<string>>(new Set(mode === 'edit' ? seedMissions.map(m => m.id) : []))
   const scrollRef   = useRef<HTMLDivElement>(null)
   const inputRef    = useRef<HTMLInputElement>(null)
   const initialized = useRef(false)
