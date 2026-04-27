@@ -13,6 +13,8 @@ interface ParsedMission {
 }
 
 interface Props {
+  mode: 'new' | 'edit'
+  initialMissions?: Mission[]   // existing missions when in edit mode
   onClose: () => void
   onMissionsAdded: () => void
 }
@@ -36,14 +38,14 @@ function stripMissionLines(text: string): string {
   return text.split('\n').filter(l => !l.match(/^\[MISSION\]/)).join('\n').trim()
 }
 
-export default function ChatModal({ onClose, onMissionsAdded }: Props) {
-  const [messages, setMessages]           = useState<(ChatMessage & { id: string })[]>([])
-  const [input, setInput]                 = useState('')
-  const [isStreaming, setIsStreaming]     = useState(false)
+export default function ChatModal({ mode, initialMissions = [], onClose, onMissionsAdded }: Props) {
+  const [messages, setMessages]             = useState<(ChatMessage & { id: string })[]>([])
+  const [input, setInput]                   = useState('')
+  const [isStreaming, setIsStreaming]       = useState(false)
   const [latestMissions, setLatestMissions] = useState<ParsedMission[]>([])
-  const [selectedIds, setSelectedIds]     = useState<Set<string>>(new Set())
-  const scrollRef  = useRef<HTMLDivElement>(null)
-  const inputRef   = useRef<HTMLInputElement>(null)
+  const [selectedIds, setSelectedIds]       = useState<Set<string>>(new Set())
+  const scrollRef   = useRef<HTMLDivElement>(null)
+  const inputRef    = useRef<HTMLInputElement>(null)
   const initialized = useRef(false)
 
   useEffect(() => {
@@ -53,7 +55,18 @@ export default function ChatModal({ onClose, onMissionsAdded }: Props) {
   useEffect(() => {
     if (initialized.current) return
     initialized.current = true
-    streamAI([{ role: 'user', content: 'Hello! Please suggest my weekly health missions.' }])
+
+    if (mode === 'edit' && initialMissions.length > 0) {
+      const missionList = initialMissions
+        .map((m, i) => `${i + 1}. ${m.emoji} ${m.text}`)
+        .join('\n')
+      streamAI([{
+        role: 'user',
+        content: `My current missions this week are:\n${missionList}\n\nLet's review them together.`,
+      }])
+    } else {
+      streamAI([{ role: 'user', content: 'Hello! Please suggest my weekly health missions.' }])
+    }
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   async function streamAI(apiMessages: { role: string; content: string }[]) {
@@ -75,7 +88,6 @@ export default function ChatModal({ onClose, onMissionsAdded }: Props) {
       const reader = res.body!.getReader()
       const decoder = new TextDecoder()
       let fullText = ''
-
       while (true) {
         const { done, value } = await reader.read()
         if (done) break
@@ -108,10 +120,16 @@ export default function ChatModal({ onClose, onMissionsAdded }: Props) {
     const updated = [...messages, userMsg]
     setMessages(updated)
 
-    const apiHistory = updated
-      .filter(m => m.content !== '')
-      .map(m => ({ role: m.role, content: m.content }))
-    streamAI(apiHistory)
+    // Build API history: prepend the hidden initial message so AI has context
+    const hiddenInit = mode === 'edit' && initialMissions.length > 0
+      ? [{
+          role: 'user' as const,
+          content: `My current missions this week are:\n${initialMissions.map((m, i) => `${i + 1}. ${m.emoji} ${m.text}`).join('\n')}\n\nLet's review them together.`,
+        }]
+      : [{ role: 'user' as const, content: 'Hello! Please suggest my weekly health missions.' }]
+
+    const aiHistory = updated.filter(m => m.content !== '').map(m => ({ role: m.role, content: m.content }))
+    streamAI([hiddenInit[0], ...aiHistory.slice(1)])
   }
 
   function toggleSelect(id: string) {
@@ -122,9 +140,7 @@ export default function ChatModal({ onClose, onMissionsAdded }: Props) {
     })
   }
 
-  function selectAll() {
-    setSelectedIds(new Set(latestMissions.map(m => m.id)))
-  }
+  function selectAll() { setSelectedIds(new Set(latestMissions.map(m => m.id))) }
 
   function handleAddMissions() {
     const selected = latestMissions.filter(m => selectedIds.has(m.id))
@@ -147,7 +163,8 @@ export default function ChatModal({ onClose, onMissionsAdded }: Props) {
   const allSelected = latestMissions.length > 0 && selectedIds.size === latestMissions.length
 
   return (
-    <div className="fixed inset-0 z-[100] flex flex-col" style={{ background: 'rgba(2,6,23,0.98)', backdropFilter: 'blur(20px)' }}>
+    <div className="fixed inset-0 z-[100] flex flex-col"
+         style={{ background: 'rgba(2,6,23,0.98)', backdropFilter: 'blur(20px)' }}>
 
       {/* Header */}
       <div className="flex-shrink-0 flex items-center justify-between px-5 py-4"
@@ -159,7 +176,9 @@ export default function ChatModal({ onClose, onMissionsAdded }: Props) {
           </div>
           <div>
             <p className="text-sm font-bold text-white">Your Wellness Coach</p>
-            <p className="text-[10px] text-ice-400/60 font-semibold">Powered by Groq</p>
+            <p className="text-[10px] text-ice-400/60 font-semibold">
+              {mode === 'edit' ? 'Editing your missions' : 'Powered by Groq'}
+            </p>
           </div>
         </div>
         <button onClick={onClose}
@@ -168,7 +187,7 @@ export default function ChatModal({ onClose, onMissionsAdded }: Props) {
         </button>
       </div>
 
-      {/* Hint bar — shown when missions are available */}
+      {/* Hint bar — only when missions are ready to confirm */}
       {latestMissions.length > 0 && !isStreaming && (
         <div className="flex-shrink-0 px-4 py-3 space-y-2"
              style={{ background: 'rgba(56,189,248,0.05)', borderBottom: '1px solid rgba(56,189,248,0.1)' }}>
@@ -193,10 +212,8 @@ export default function ChatModal({ onClose, onMissionsAdded }: Props) {
         </div>
       )}
 
-      {/* Scrollable messages + mission cards */}
+      {/* Messages + mission cards */}
       <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-4 space-y-4 min-h-0">
-
-        {/* Typing indicator on first load */}
         {messages.length === 0 && (
           <div className="flex justify-start">
             <div className="glass rounded-2xl rounded-tl-sm px-4 py-3">
@@ -213,9 +230,7 @@ export default function ChatModal({ onClose, onMissionsAdded }: Props) {
           <div key={msg.id} className={clsx('flex', msg.role === 'user' ? 'justify-end' : 'justify-start')}>
             <div className={clsx(
               'rounded-2xl px-4 py-3 max-w-[85%] text-sm font-semibold leading-relaxed',
-              msg.role === 'user'
-                ? 'rounded-tr-sm text-dark-950'
-                : 'glass text-slate-200 rounded-tl-sm',
+              msg.role === 'user' ? 'rounded-tr-sm text-dark-950' : 'glass text-slate-200 rounded-tl-sm',
             )}
             style={msg.role === 'user' ? { background: 'linear-gradient(135deg, #38bdf8, #0ea5e9)' } : {}}>
               <span className="whitespace-pre-wrap">
@@ -228,26 +243,23 @@ export default function ChatModal({ onClose, onMissionsAdded }: Props) {
           </div>
         ))}
 
-        {/* Mission suggestion cards */}
+        {/* Mission cards */}
         {latestMissions.length > 0 && !isStreaming && (
           <div className="space-y-2 animate-slide-up pb-2">
             <div className="flex items-center justify-between px-1">
               <p className="text-xs text-ice-400/60 font-bold uppercase tracking-widest">
-                Suggested missions
+                {mode === 'edit' ? 'Updated missions' : 'Suggested missions'}
               </p>
               <button onClick={allSelected ? () => setSelectedIds(new Set()) : selectAll}
                       className="text-[11px] font-black text-ice-400 hover:text-ice-200 transition-colors">
                 {allSelected ? 'Deselect all' : 'Select all'}
               </button>
             </div>
-
             {latestMissions.map(m => (
               <button key={m.id} onClick={() => toggleSelect(m.id)}
                       className={clsx(
                         'w-full flex items-center gap-3 rounded-2xl px-4 py-3 text-left transition-all duration-200 active:scale-[0.98]',
-                        selectedIds.has(m.id)
-                          ? 'border border-ice-400/50'
-                          : 'glass opacity-60',
+                        selectedIds.has(m.id) ? 'border border-ice-400/50' : 'glass opacity-60',
                       )}
                       style={selectedIds.has(m.id) ? { background: 'rgba(56,189,248,0.1)' } : {}}>
                 <div className={clsx(
@@ -260,7 +272,6 @@ export default function ChatModal({ onClose, onMissionsAdded }: Props) {
                 <span className="text-sm font-semibold text-white leading-snug">{m.text}</span>
               </button>
             ))}
-
             <p className="text-center text-[10px] text-slate-600 font-semibold pt-1">
               We recommend 3–7 missions per week
             </p>
@@ -268,27 +279,29 @@ export default function ChatModal({ onClose, onMissionsAdded }: Props) {
         )}
       </div>
 
-      {/* Sticky bottom bar — always visible */}
+      {/* Sticky bottom */}
       <div className="flex-shrink-0 px-4 pb-6 pt-3 space-y-2"
            style={{ borderTop: '1px solid rgba(56,189,248,0.08)' }}>
-
-        {/* Add missions button — shown when something is selected */}
         {latestMissions.length > 0 && (
           <button onClick={handleAddMissions} disabled={selectedIds.size === 0}
                   className="ice-btn w-full py-3 text-sm text-dark-950 disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center gap-2">
             <Check size={15} strokeWidth={3} />
-            Add {selectedIds.size > 0 ? selectedIds.size : ''} Mission{selectedIds.size !== 1 ? 's' : ''} to My Week
+            {mode === 'edit' ? 'Save' : 'Add'} {selectedIds.size > 0 ? selectedIds.size : ''} Mission{selectedIds.size !== 1 ? 's' : ''}
           </button>
         )}
-
-        {/* Chat input — always visible */}
         <div className="flex items-center gap-2">
           <input
             ref={inputRef}
             value={input}
             onChange={e => setInput(e.target.value)}
             onKeyDown={e => e.key === 'Enter' && !e.shiftKey && handleSend()}
-            placeholder={latestMissions.length > 0 ? 'Swap a mission, add one, ask for changes…' : 'Tell me about your lifestyle…'}
+            placeholder={
+              mode === 'edit'
+                ? 'What would you like to change?'
+                : latestMissions.length > 0
+                ? 'Swap a mission, add one, ask for changes…'
+                : 'Tell me about your lifestyle…'
+            }
             disabled={isStreaming}
             className="flex-1 glass rounded-2xl px-4 py-3 text-sm font-semibold text-white placeholder:text-slate-600 focus:outline-none focus:border-ice-400/50 transition-all disabled:opacity-40"
           />

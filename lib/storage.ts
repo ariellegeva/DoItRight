@@ -102,6 +102,14 @@ export function formatWeekLabel(weekOf: string): string {
   return date.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
 }
 
+export function getLastWeekMissions(): Mission[] {
+  const current = getCurrentWeekMonday()
+  const d = new Date(current + 'T12:00:00')
+  d.setDate(d.getDate() - 7)
+  const lastWeek = d.toISOString().split('T')[0]
+  return getMissions().filter(m => m.weekOf === lastWeek)
+}
+
 export function getPastWeeks(): string[] {
   const missions = getMissions()
   const current = getCurrentWeekMonday()
