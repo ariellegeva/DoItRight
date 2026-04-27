@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { Sparkles, ArrowRight } from 'lucide-react'
 import {
@@ -12,7 +12,7 @@ import { auth } from '@/lib/firebase'
 import { saveUserProfile } from '@/lib/firestore'
 import { useAuth } from '@/context/AuthContext'
 
-export default function LoginPage() {
+function LoginForm() {
   const router         = useRouter()
   const searchParams   = useSearchParams()
   const redirect       = searchParams.get('redirect') ?? '/'
@@ -115,5 +115,13 @@ export default function LoginPage() {
         </form>
       </div>
     </main>
+  )
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense>
+      <LoginForm />
+    </Suspense>
   )
 }

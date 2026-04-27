@@ -1,4 +1,4 @@
-import type { Metadata } from 'next'
+import type { Metadata, Viewport } from 'next'
 import { Nunito } from 'next/font/google'
 import { AuthProvider } from '@/context/AuthContext'
 import './globals.css'
@@ -13,8 +13,13 @@ const nunito = Nunito({
 export const metadata: Metadata = {
   title: 'Do It Right',
   description: 'Your weekly health missions, powered by AI.',
+}
+
+export const viewport: Viewport = {
   themeColor: '#020617',
-  viewport: 'width=device-width, initial-scale=1, maximum-scale=1',
+  width: 'device-width',
+  initialScale: 1,
+  maximumScale: 1,
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
