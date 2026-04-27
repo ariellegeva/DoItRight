@@ -3,7 +3,8 @@
 import { useState } from 'react'
 import { Trash2, Check, Pencil, X } from 'lucide-react'
 import clsx from 'clsx'
-import { deleteMission, updateMissionText, checkInToday, uncheckToday, getToday } from '@/lib/storage'
+import { deleteMission, updateMissionText, checkInToday, uncheckToday, getToday } from '@/lib/firestore'
+import { useAuth } from '@/context/AuthContext'
 import type { Mission } from '@/lib/types'
 
 const DAY_LABELS = ['M', 'T', 'W', 'T', 'F', 'S', 'S']
@@ -24,6 +25,7 @@ interface Props {
 }
 
 export default function MissionCard({ mission, onUpdate, readonly = false }: Props) {
+  const { user } = useAuth()
   const [editing, setEditing]       = useState(false)
   const [editText, setEditText]     = useState(mission.text)
   const [editEmoji, setEditEmoji]   = useState(mission.emoji)
@@ -35,25 +37,28 @@ export default function MissionCard({ mission, onUpdate, readonly = false }: Pro
   const weekDays   = getWeekDays(mission.weekOf)
   const totalDone  = checkins.length
 
-  function handleCheck() {
+  async function handleCheck() {
+    if (!user) return
     if (doneToday) {
-      uncheckToday(mission.id)
+      await uncheckToday(user.uid, mission.id)
     } else {
-      checkInToday(mission.id)
+      await checkInToday(user.uid, mission.id)
       setShowDone(true)
       setTimeout(() => setShowDone(false), 2200)
     }
     onUpdate()
   }
 
-  function handleDelete() {
-    deleteMission(mission.id)
+  async function handleDelete() {
+    if (!user) return
+    await deleteMission(user.uid, mission.id)
     onUpdate()
   }
 
-  function handleSave() {
+  async function handleSave() {
+    if (!user) return
     if (editText.trim()) {
-      updateMissionText(mission.id, editText.trim(), editEmoji)
+      await updateMissionText(user.uid, mission.id, editText.trim(), editEmoji)
       onUpdate()
     }
     setEditing(false)

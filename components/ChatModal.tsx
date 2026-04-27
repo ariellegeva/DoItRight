@@ -3,7 +3,8 @@
 import { useState, useEffect, useRef } from 'react'
 import { X, Send, Sparkles, Check, CheckCheck } from 'lucide-react'
 import clsx from 'clsx'
-import { replaceWeekMissions, getCurrentWeekMonday } from '@/lib/storage'
+import { replaceWeekMissions, getCurrentWeekMonday } from '@/lib/firestore'
+import { useAuth } from '@/context/AuthContext'
 import type { ChatMessage, Mission } from '@/lib/types'
 
 interface ParsedMission {
@@ -39,6 +40,7 @@ function stripMissionLines(text: string): string {
 }
 
 export default function ChatModal({ mode, initialMissions = [], onClose, onMissionsAdded }: Props) {
+  const { user } = useAuth()
   const seedMissions: ParsedMission[] = initialMissions.map(m => ({ id: m.id, emoji: m.emoji, text: m.text }))
 
   const [messages, setMessages]             = useState<(ChatMessage & { id: string })[]>([])
@@ -144,7 +146,8 @@ export default function ChatModal({ mode, initialMissions = [], onClose, onMissi
 
   function selectAll() { setSelectedIds(new Set(latestMissions.map(m => m.id))) }
 
-  function handleAddMissions() {
+  async function handleAddMissions() {
+    if (!user) return
     const selected = latestMissions.filter(m => selectedIds.has(m.id))
     if (selected.length === 0) return
     const weekOf = getCurrentWeekMonday()
@@ -157,7 +160,7 @@ export default function ChatModal({ mode, initialMissions = [], onClose, onMissi
       weekOf,
       createdAt: new Date().toISOString(),
     }))
-    replaceWeekMissions(weekOf, missions)
+    await replaceWeekMissions(user.uid, weekOf, missions)
     onMissionsAdded()
     onClose()
   }

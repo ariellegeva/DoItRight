@@ -4,34 +4,39 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { Users, MessageCircle, Copy, Check, Flame } from 'lucide-react'
 import BottomNav from '@/components/BottomNav'
-import { getUser, addMissions, getCurrentWeekMonday, MOCK_FRIENDS } from '@/lib/storage'
+import { useAuth } from '@/context/AuthContext'
+import { replaceWeekMissions, getCurrentWeekMonday } from '@/lib/firestore'
+import { MOCK_FRIENDS } from '@/lib/storage'
 import type { Friend } from '@/lib/types'
 
 export default function FriendsPage() {
   const router = useRouter()
+  const { user, loading } = useAuth()
   const [friends] = useState<Friend[]>(MOCK_FRIENDS)
   const [expanded, setExpanded] = useState<string | null>(null)
   const [copied, setCopied] = useState<string | null>(null)
   const [loaded, setLoaded] = useState(false)
 
   useEffect(() => {
-    if (!getUser()) { router.replace('/login'); return }
-    setLoaded(true)
-  }, [router])
+    if (!loading && !user) { router.replace('/login'); return }
+    if (user) setLoaded(true)
+  }, [user, loading, router])
 
   if (!loaded) return null
 
-  function handleCopy(friend: Friend) {
+  async function handleCopy(friend: Friend) {
+    if (!user) return
     const weekOf = getCurrentWeekMonday()
-    addMissions(friend.missions.map(m => ({
+    const missions = friend.missions.map(m => ({
       id: `copy-${m.id}-${Date.now()}`,
       text: m.text,
       emoji: m.emoji,
       completed: false,
-      checkins: [],
+      checkins: [] as string[],
       weekOf,
       createdAt: new Date().toISOString(),
-    })))
+    }))
+    await replaceWeekMissions(user.uid, weekOf, missions)
     setCopied(friend.id)
     setTimeout(() => setCopied(null), 2000)
   }
