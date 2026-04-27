@@ -1,0 +1,103 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --ice: #38bdf8;
+    --ice-dim: rgba(56, 189, 248, 0.15);
+  }
+
+  html {
+    background-color: #020617;
+  }
+
+  body {
+    @apply bg-dark-950 text-white antialiased;
+    font-family: var(--font-nunito), Nunito, sans-serif;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  * {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  ::selection {
+    background-color: rgba(56, 189, 248, 0.3);
+  }
+
+  ::-webkit-scrollbar {
+    width: 4px;
+    height: 4px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    @apply rounded-full;
+    background: rgba(56, 189, 248, 0.3);
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: rgba(56, 189, 248, 0.5);
+  }
+}
+
+@layer components {
+  .glass {
+    background: rgba(255, 255, 255, 0.04);
+    backdrop-filter: blur(12px);
+    border: 1px solid rgba(56, 189, 248, 0.12);
+  }
+
+  .glass-hover {
+    @apply glass transition-all duration-200;
+  }
+
+  .glass-hover:hover {
+    background: rgba(56, 189, 248, 0.08);
+    border-color: rgba(56, 189, 248, 0.3);
+  }
+
+  .ice-btn {
+    @apply rounded-2xl font-bold transition-all duration-200 active:scale-95;
+    background: linear-gradient(135deg, #38bdf8, #0ea5e9);
+    box-shadow: 0 0 20px rgba(56, 189, 248, 0.3);
+  }
+
+  .ice-btn:hover {
+    box-shadow: 0 0 32px rgba(56, 189, 248, 0.5);
+    transform: translateY(-1px);
+  }
+
+  .ice-btn:active {
+    transform: translateY(0) scale(0.97);
+  }
+
+  .ice-outline-btn {
+    @apply rounded-2xl font-semibold border border-ice-400/40 text-ice-300 transition-all duration-200 active:scale-95;
+    background: rgba(56, 189, 248, 0.06);
+  }
+
+  .ice-outline-btn:hover {
+    @apply border-ice-400/70 text-ice-200;
+    background: rgba(56, 189, 248, 0.12);
+  }
+
+  .page-container {
+    @apply min-h-screen pb-24 pt-6 px-4;
+    background: #020617;
+  }
+}
+
+@keyframes typing-dot {
+  0%, 60%, 100% { transform: translateY(0); opacity: 0.5; }
+  30% { transform: translateY(-4px); opacity: 1; }
+}
+
+.typing-dot:nth-child(1) { animation: typing-dot 1.2s ease-in-out infinite 0s; }
+.typing-dot:nth-child(2) { animation: typing-dot 1.2s ease-in-out infinite 0.2s; }
+.typing-dot:nth-child(3) { animation: typing-dot 1.2s ease-in-out infinite 0.4s; }
