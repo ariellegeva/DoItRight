@@ -9,6 +9,7 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@dataconnect/generated": "file:src/dataconnect-generated",
     "clsx": "^2.1.1",
     "firebase": "^12.12.1",
     "framer-motion": "^11.3.0",
