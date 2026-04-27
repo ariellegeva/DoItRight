@@ -23,17 +23,24 @@ export async function getFriends(uid: string): Promise<FriendRecord[]> {
 }
 
 export async function addFriend(myUid: string, theirUid: string): Promise<void> {
-  const profile = await getUserProfile(theirUid)
-  if (!profile) throw new Error('User not found')
-  await setDoc(doc(db, 'users', myUid, 'friends', theirUid), {
-    uid: theirUid,
-    name: profile.name,
-    addedAt: new Date().toISOString(),
-  })
+  const [theirProfile, myProfile] = await Promise.all([
+    getUserProfile(theirUid),
+    getUserProfile(myUid),
+  ])
+  if (!theirProfile) throw new Error('User not found')
+  if (!myProfile) throw new Error('Your profile not found')
+  const now = new Date().toISOString()
+  const batch = writeBatch(db)
+  batch.set(doc(db, 'users', myUid, 'friends', theirUid), { uid: theirUid, name: theirProfile.name, addedAt: now })
+  batch.set(doc(db, 'users', theirUid, 'friends', myUid), { uid: myUid, name: myProfile.name, addedAt: now })
+  await batch.commit()
 }
 
 export async function removeFriend(myUid: string, theirUid: string): Promise<void> {
-  await deleteDoc(doc(db, 'users', myUid, 'friends', theirUid))
+  const batch = writeBatch(db)
+  batch.delete(doc(db, 'users', myUid, 'friends', theirUid))
+  batch.delete(doc(db, 'users', theirUid, 'friends', myUid))
+  await batch.commit()
 }
 
 export async function isFriend(myUid: string, theirUid: string): Promise<boolean> {
