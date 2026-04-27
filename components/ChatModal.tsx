@@ -1,9 +1,9 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
-import { X, Send, Sparkles, Check } from 'lucide-react'
+import { X, Send, Sparkles, Check, CheckCheck } from 'lucide-react'
 import clsx from 'clsx'
-import { addMissions, getCurrentWeekMonday } from '@/lib/storage'
+import { replaceWeekMissions, getCurrentWeekMonday } from '@/lib/storage'
 import type { ChatMessage, Mission } from '@/lib/types'
 
 interface ParsedMission {
@@ -20,7 +20,6 @@ interface Props {
 function parseMissions(text: string): ParsedMission[] {
   const lines = text.split('\n')
   const missions: ParsedMission[] = []
-
   for (const line of lines) {
     const match = line.match(/^\[MISSION\]\s+(.+)/)
     if (!match) continue
@@ -34,44 +33,33 @@ function parseMissions(text: string): ParsedMission[] {
 }
 
 function stripMissionLines(text: string): string {
-  return text
-    .split('\n')
-    .filter(line => !line.match(/^\[MISSION\]/))
-    .join('\n')
-    .trim()
+  return text.split('\n').filter(l => !l.match(/^\[MISSION\]/)).join('\n').trim()
 }
 
 export default function ChatModal({ onClose, onMissionsAdded }: Props) {
-  const [messages, setMessages] = useState<(ChatMessage & { id: string })[]>([])
-  const [input, setInput] = useState('')
-  const [isStreaming, setIsStreaming] = useState(false)
+  const [messages, setMessages]           = useState<(ChatMessage & { id: string })[]>([])
+  const [input, setInput]                 = useState('')
+  const [isStreaming, setIsStreaming]     = useState(false)
   const [latestMissions, setLatestMissions] = useState<ParsedMission[]>([])
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
-  const scrollRef = useRef<HTMLDivElement>(null)
-  const inputRef = useRef<HTMLInputElement>(null)
+  const [selectedIds, setSelectedIds]     = useState<Set<string>>(new Set())
+  const scrollRef  = useRef<HTMLDivElement>(null)
+  const inputRef   = useRef<HTMLInputElement>(null)
   const initialized = useRef(false)
 
-  // Auto-scroll on new content
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' })
-  }, [messages, isStreaming])
+  }, [messages, latestMissions, isStreaming])
 
-  // Trigger initial AI message on mount
   useEffect(() => {
     if (initialized.current) return
     initialized.current = true
-    streamAI([{ role: 'user', content: 'Hello! Please suggest my weekly health missions.' }], true)
+    streamAI([{ role: 'user', content: 'Hello! Please suggest my weekly health missions.' }])
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
-  async function streamAI(apiMessages: { role: string; content: string }[], isInitial = false) {
+  async function streamAI(apiMessages: { role: string; content: string }[]) {
     setIsStreaming(true)
     const aiId = `ai-${Date.now()}`
-
-    if (!isInitial) {
-      setMessages(prev => [...prev, { id: aiId, role: 'assistant', content: '' }])
-    } else {
-      setMessages([{ id: aiId, role: 'assistant', content: '' }])
-    }
+    setMessages(prev => [...prev.filter(m => m.content !== ''), { id: aiId, role: 'assistant', content: '' }])
 
     try {
       const res = await fetch('/api/chat', {
@@ -79,8 +67,10 @@ export default function ChatModal({ onClose, onMissionsAdded }: Props) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ messages: apiMessages }),
       })
-
-      if (!res.ok) throw new Error('API error')
+      if (!res.ok) {
+        const errText = await res.text()
+        throw new Error(errText || 'API error')
+      }
 
       const reader = res.body!.getReader()
       const decoder = new TextDecoder()
@@ -89,11 +79,8 @@ export default function ChatModal({ onClose, onMissionsAdded }: Props) {
       while (true) {
         const { done, value } = await reader.read()
         if (done) break
-        const chunk = decoder.decode(value, { stream: true })
-        fullText += chunk
-        setMessages(prev =>
-          prev.map(m => m.id === aiId ? { ...m, content: fullText } : m)
-        )
+        fullText += decoder.decode(value, { stream: true })
+        setMessages(prev => prev.map(m => m.id === aiId ? { ...m, content: fullText } : m))
       }
 
       const parsed = parseMissions(fullText)
@@ -101,15 +88,14 @@ export default function ChatModal({ onClose, onMissionsAdded }: Props) {
         setLatestMissions(parsed)
         setSelectedIds(new Set(parsed.map(m => m.id)))
       }
-    } catch {
-      setMessages(prev =>
-        prev.map(m => m.id === aiId
-          ? { ...m, content: "Hmm, couldn't reach the AI right now. Check your API key and try again!" }
-          : m
-        )
-      )
+    } catch (err: unknown) {
+      const detail = err instanceof Error ? err.message : ''
+      setMessages(prev => prev.map(m =>
+        m.id === aiId ? { ...m, content: `Couldn't reach the AI. ${detail || 'Check your API key and restart the dev server.'}` } : m
+      ))
     } finally {
       setIsStreaming(false)
+      setTimeout(() => inputRef.current?.focus(), 100)
     }
   }
 
@@ -119,17 +105,16 @@ export default function ChatModal({ onClose, onMissionsAdded }: Props) {
     setInput('')
 
     const userMsg = { id: `u-${Date.now()}`, role: 'user' as const, content: text }
-    const updatedMessages = [...messages, userMsg]
-    setMessages(updatedMessages)
+    const updated = [...messages, userMsg]
+    setMessages(updated)
 
-    const apiHistory = updatedMessages
-      .filter(m => !(m.id.startsWith('ai-') && m.content === ''))
+    const apiHistory = updated
+      .filter(m => m.content !== '')
       .map(m => ({ role: m.role, content: m.content }))
-
     streamAI(apiHistory)
   }
 
-  function toggleMissionSelect(id: string) {
+  function toggleSelect(id: string) {
     setSelectedIds(prev => {
       const next = new Set(prev)
       next.has(id) ? next.delete(id) : next.add(id)
@@ -137,31 +122,35 @@ export default function ChatModal({ onClose, onMissionsAdded }: Props) {
     })
   }
 
+  function selectAll() {
+    setSelectedIds(new Set(latestMissions.map(m => m.id)))
+  }
+
   function handleAddMissions() {
     const selected = latestMissions.filter(m => selectedIds.has(m.id))
     if (selected.length === 0) return
-
     const weekOf = getCurrentWeekMonday()
     const missions: Mission[] = selected.map(m => ({
       id: `${m.id}-${Date.now()}`,
       text: m.text,
       emoji: m.emoji,
       completed: false,
+      checkins: [],
       weekOf,
       createdAt: new Date().toISOString(),
     }))
-
-    addMissions(missions)
+    replaceWeekMissions(weekOf, missions)
     onMissionsAdded()
     onClose()
   }
 
+  const allSelected = latestMissions.length > 0 && selectedIds.size === latestMissions.length
+
   return (
-    <div className="fixed inset-0 z-50 flex flex-col animate-fade-in"
-         style={{ background: 'rgba(2,6,23,0.97)', backdropFilter: 'blur(20px)' }}>
+    <div className="fixed inset-0 z-[100] flex flex-col" style={{ background: 'rgba(2,6,23,0.98)', backdropFilter: 'blur(20px)' }}>
 
       {/* Header */}
-      <div className="flex items-center justify-between px-5 py-4"
+      <div className="flex-shrink-0 flex items-center justify-between px-5 py-4"
            style={{ borderBottom: '1px solid rgba(56,189,248,0.1)' }}>
         <div className="flex items-center gap-2">
           <div className="w-8 h-8 rounded-xl flex items-center justify-center"
@@ -170,7 +159,7 @@ export default function ChatModal({ onClose, onMissionsAdded }: Props) {
           </div>
           <div>
             <p className="text-sm font-bold text-white">Your Wellness Coach</p>
-            <p className="text-[10px] text-ice-400/60 font-semibold">Powered by Claude AI</p>
+            <p className="text-[10px] text-ice-400/60 font-semibold">Powered by Groq</p>
           </div>
         </div>
         <button onClick={onClose}
@@ -179,11 +168,38 @@ export default function ChatModal({ onClose, onMissionsAdded }: Props) {
         </button>
       </div>
 
-      {/* Messages */}
-      <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
+      {/* Hint bar — shown when missions are available */}
+      {latestMissions.length > 0 && !isStreaming && (
+        <div className="flex-shrink-0 px-4 py-3 space-y-2"
+             style={{ background: 'rgba(56,189,248,0.05)', borderBottom: '1px solid rgba(56,189,248,0.1)' }}>
+          <p className="text-center text-[11px] font-black text-slate-400 uppercase tracking-widest">Your options</p>
+          <div className="flex gap-2">
+            <div className="flex-1 flex flex-col items-center gap-1 rounded-2xl py-2.5 px-2"
+                 style={{ background: 'rgba(56,189,248,0.1)', border: '1px solid rgba(56,189,248,0.25)' }}>
+              <CheckCheck size={16} className="text-ice-300" />
+              <span className="text-[11px] font-black text-ice-300 text-center leading-tight">Accept all</span>
+            </div>
+            <div className="flex-1 flex flex-col items-center gap-1 rounded-2xl py-2.5 px-2"
+                 style={{ background: 'rgba(56,189,248,0.06)', border: '1px solid rgba(56,189,248,0.15)' }}>
+              <Check size={16} className="text-ice-400" />
+              <span className="text-[11px] font-black text-ice-400 text-center leading-tight">Pick some</span>
+            </div>
+            <div className="flex-1 flex flex-col items-center gap-1 rounded-2xl py-2.5 px-2"
+                 style={{ background: 'rgba(56,189,248,0.06)', border: '1px solid rgba(56,189,248,0.15)' }}>
+              <Send size={16} className="text-slate-400" />
+              <span className="text-[11px] font-black text-slate-400 text-center leading-tight">Keep chatting</span>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Scrollable messages + mission cards */}
+      <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-4 space-y-4 min-h-0">
+
+        {/* Typing indicator on first load */}
         {messages.length === 0 && (
           <div className="flex justify-start">
-            <div className="glass rounded-2xl rounded-tl-sm px-4 py-3 max-w-[85%]">
+            <div className="glass rounded-2xl rounded-tl-sm px-4 py-3">
               <div className="flex gap-1 py-1">
                 <span className="typing-dot w-2 h-2 rounded-full bg-ice-400 inline-block" />
                 <span className="typing-dot w-2 h-2 rounded-full bg-ice-400 inline-block" />
@@ -198,40 +214,42 @@ export default function ChatModal({ onClose, onMissionsAdded }: Props) {
             <div className={clsx(
               'rounded-2xl px-4 py-3 max-w-[85%] text-sm font-semibold leading-relaxed',
               msg.role === 'user'
-                ? 'text-dark-950 rounded-tr-sm'
+                ? 'rounded-tr-sm text-dark-950'
                 : 'glass text-slate-200 rounded-tl-sm',
             )}
             style={msg.role === 'user' ? { background: 'linear-gradient(135deg, #38bdf8, #0ea5e9)' } : {}}>
-              {msg.role === 'assistant' ? (
-                <>
-                  <span className="whitespace-pre-wrap">
-                    {stripMissionLines(msg.content)}
-                    {isStreaming && msg.id === messages[messages.length - 1]?.id && (
-                      <span className="inline-block w-1 h-4 ml-0.5 bg-ice-400 animate-pulse rounded-sm align-middle" />
-                    )}
-                  </span>
-                </>
-              ) : (
-                <span className="whitespace-pre-wrap">{msg.content}</span>
-              )}
+              <span className="whitespace-pre-wrap">
+                {msg.role === 'assistant' ? stripMissionLines(msg.content) : msg.content}
+                {isStreaming && msg.id === messages[messages.length - 1]?.id && (
+                  <span className="inline-block w-1 h-4 ml-0.5 bg-ice-400 animate-pulse rounded-sm align-middle" />
+                )}
+              </span>
             </div>
           </div>
         ))}
 
         {/* Mission suggestion cards */}
         {latestMissions.length > 0 && !isStreaming && (
-          <div className="space-y-2 animate-slide-up">
-            <p className="text-xs text-ice-400/60 font-bold uppercase tracking-widest px-1 pt-1">
-              Suggested Missions — tap to select
-            </p>
+          <div className="space-y-2 animate-slide-up pb-2">
+            <div className="flex items-center justify-between px-1">
+              <p className="text-xs text-ice-400/60 font-bold uppercase tracking-widest">
+                Suggested missions
+              </p>
+              <button onClick={allSelected ? () => setSelectedIds(new Set()) : selectAll}
+                      className="text-[11px] font-black text-ice-400 hover:text-ice-200 transition-colors">
+                {allSelected ? 'Deselect all' : 'Select all'}
+              </button>
+            </div>
+
             {latestMissions.map(m => (
-              <button key={m.id} onClick={() => toggleMissionSelect(m.id)}
+              <button key={m.id} onClick={() => toggleSelect(m.id)}
                       className={clsx(
-                        'w-full flex items-center gap-3 rounded-2xl px-4 py-3 text-left transition-all duration-200 active:scale-98',
+                        'w-full flex items-center gap-3 rounded-2xl px-4 py-3 text-left transition-all duration-200 active:scale-[0.98]',
                         selectedIds.has(m.id)
-                          ? 'bg-ice-500/15 border border-ice-400/50'
+                          ? 'border border-ice-400/50'
                           : 'glass opacity-60',
-                      )}>
+                      )}
+                      style={selectedIds.has(m.id) ? { background: 'rgba(56,189,248,0.1)' } : {}}>
                 <div className={clsx(
                   'w-6 h-6 rounded-full border-2 flex-shrink-0 flex items-center justify-center transition-all',
                   selectedIds.has(m.id) ? 'bg-ice-500 border-ice-400' : 'border-slate-600',
@@ -243,34 +261,39 @@ export default function ChatModal({ onClose, onMissionsAdded }: Props) {
               </button>
             ))}
 
-            <div className="flex items-center gap-2 pt-1">
-              <button onClick={handleAddMissions}
-                      disabled={selectedIds.size === 0}
-                      className="ice-btn flex-1 py-3 text-sm text-dark-950 disabled:opacity-30 disabled:cursor-not-allowed">
-                Add {selectedIds.size > 0 ? selectedIds.size : ''} Mission{selectedIds.size !== 1 ? 's' : ''} to My Week ✓
-              </button>
-            </div>
-            <p className="text-center text-[10px] text-slate-600 font-semibold">
+            <p className="text-center text-[10px] text-slate-600 font-semibold pt-1">
               We recommend 3–7 missions per week
             </p>
           </div>
         )}
       </div>
 
-      {/* Input */}
-      <div className="px-4 pb-6 pt-3" style={{ borderTop: '1px solid rgba(56,189,248,0.08)' }}>
+      {/* Sticky bottom bar — always visible */}
+      <div className="flex-shrink-0 px-4 pb-6 pt-3 space-y-2"
+           style={{ borderTop: '1px solid rgba(56,189,248,0.08)' }}>
+
+        {/* Add missions button — shown when something is selected */}
+        {latestMissions.length > 0 && (
+          <button onClick={handleAddMissions} disabled={selectedIds.size === 0}
+                  className="ice-btn w-full py-3 text-sm text-dark-950 disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center gap-2">
+            <Check size={15} strokeWidth={3} />
+            Add {selectedIds.size > 0 ? selectedIds.size : ''} Mission{selectedIds.size !== 1 ? 's' : ''} to My Week
+          </button>
+        )}
+
+        {/* Chat input — always visible */}
         <div className="flex items-center gap-2">
           <input
             ref={inputRef}
             value={input}
             onChange={e => setInput(e.target.value)}
             onKeyDown={e => e.key === 'Enter' && !e.shiftKey && handleSend()}
-            placeholder="Customize your missions…"
+            placeholder={latestMissions.length > 0 ? 'Swap a mission, add one, ask for changes…' : 'Tell me about your lifestyle…'}
             disabled={isStreaming}
             className="flex-1 glass rounded-2xl px-4 py-3 text-sm font-semibold text-white placeholder:text-slate-600 focus:outline-none focus:border-ice-400/50 transition-all disabled:opacity-40"
           />
           <button onClick={handleSend} disabled={!input.trim() || isStreaming}
-                  className="w-11 h-11 rounded-2xl flex items-center justify-center transition-all active:scale-90 disabled:opacity-30"
+                  className="w-11 h-11 rounded-2xl flex items-center justify-center transition-all active:scale-90 disabled:opacity-30 flex-shrink-0"
                   style={{ background: 'linear-gradient(135deg, #38bdf8, #0ea5e9)', boxShadow: '0 0 14px rgba(56,189,248,0.3)' }}>
             <Send size={16} className="text-dark-950" />
           </button>

@@ -9,8 +9,9 @@ export interface Mission {
   id: string
   text: string
   emoji: string
-  completed: boolean
-  weekOf: string  // "YYYY-MM-DD" of that week's Monday
+  completed: boolean        // true only for past weeks display
+  checkins: string[]        // "YYYY-MM-DD" dates checked this week
+  weekOf: string            // "YYYY-MM-DD" of that week's Monday
   createdAt: string
 }
 

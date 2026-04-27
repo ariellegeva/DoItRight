@@ -1,7 +1,10 @@
-import Anthropic from '@anthropic-ai/sdk'
+import OpenAI from 'openai'
 import { NextRequest } from 'next/server'
 
-const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
+const client = new OpenAI({
+  apiKey: process.env.GROQ_API_KEY,
+  baseURL: 'https://api.groq.com/openai/v1',
+})
 
 const SYSTEM_PROMPT = `You are an energetic, warm wellness coach for "Do It Right" — a weekly health missions app. Your job is to help users pick 3–7 personalized weekly missions that push them toward a healthier lifestyle.
 
@@ -13,7 +16,7 @@ Pick a fitting emoji for each mission. Keep mission text specific and measurable
 
 FIRST MESSAGE instructions:
 1. One warm, punchy greeting sentence (e.g. "Let's build your week! 🔥")
-2. Immediately suggest 5 balanced starter missions covering hydration, sleep, exercise, nutrition, and mindfulness
+2. Immediately suggest 5 balanced starter missions related to hydration, sleep, exercise, nutrition, or mindfulness
 3. End with: "Happy with these, or want to swap any out?"
 
 For follow-up messages: if the user asks to change, add, or remove missions, respond with an updated full list using the [MISSION] format, plus a short encouraging line.
@@ -24,11 +27,13 @@ export async function POST(req: NextRequest) {
   try {
     const { messages } = await req.json()
 
-    const stream = await client.messages.create({
-      model: 'claude-haiku-4-5-20251001',
+    const stream = await client.chat.completions.create({
+      model: 'llama-3.3-70b-versatile',
       max_tokens: 800,
-      system: SYSTEM_PROMPT,
-      messages,
+      messages: [
+        { role: 'system', content: SYSTEM_PROMPT },
+        ...messages,
+      ],
       stream: true,
     })
 
@@ -36,10 +41,9 @@ export async function POST(req: NextRequest) {
     const readable = new ReadableStream({
       async start(controller) {
         try {
-          for await (const event of stream) {
-            if (event.type === 'content_block_delta' && event.delta.type === 'text_delta') {
-              controller.enqueue(encoder.encode(event.delta.text))
-            }
+          for await (const chunk of stream) {
+            const text = chunk.choices[0]?.delta?.content ?? ''
+            if (text) controller.enqueue(encoder.encode(text))
           }
         } catch (e) {
           controller.error(e)
@@ -52,8 +56,9 @@ export async function POST(req: NextRequest) {
     return new Response(readable, {
       headers: { 'Content-Type': 'text/plain; charset=utf-8' },
     })
-  } catch (err) {
-    console.error('Chat API error:', err)
-    return new Response('Failed to connect to AI', { status: 500 })
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err)
+    console.error('Chat API error:', msg)
+    return new Response(msg, { status: 500 })
   }
 }

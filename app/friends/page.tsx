@@ -28,6 +28,7 @@ export default function FriendsPage() {
       text: m.text,
       emoji: m.emoji,
       completed: false,
+      checkins: [],
       weekOf,
       createdAt: new Date().toISOString(),
     })))

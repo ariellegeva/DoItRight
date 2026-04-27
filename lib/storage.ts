@@ -42,9 +42,35 @@ export function addMissions(newMissions: Mission[]): void {
   saveMissions([...existing, ...newMissions])
 }
 
+export function replaceWeekMissions(weekOf: string, newMissions: Mission[]): void {
+  const others = getMissions().filter(m => m.weekOf !== weekOf)
+  saveMissions([...others, ...newMissions])
+}
+
 export function toggleMission(id: string): void {
   const missions = getMissions()
   saveMissions(missions.map(m => m.id === id ? { ...m, completed: !m.completed } : m))
+}
+
+export function checkInToday(id: string): void {
+  const today = new Date().toISOString().split('T')[0]
+  saveMissions(getMissions().map(m => {
+    if (m.id !== id) return m
+    const checkins = m.checkins ?? []
+    if (checkins.includes(today)) return m
+    return { ...m, checkins: [...checkins, today] }
+  }))
+}
+
+export function uncheckToday(id: string): void {
+  const today = new Date().toISOString().split('T')[0]
+  saveMissions(getMissions().map(m =>
+    m.id === id ? { ...m, checkins: (m.checkins ?? []).filter(d => d !== today) } : m
+  ))
+}
+
+export function getToday(): string {
+  return new Date().toISOString().split('T')[0]
 }
 
 export function deleteMission(id: string): void {

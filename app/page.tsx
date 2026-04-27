@@ -36,9 +36,10 @@ export default function HomePage() {
 
   if (!loaded) return null
 
-  const completed = missions.filter(m => m.completed).length
+  const today = new Date().toISOString().split('T')[0]
+  const doneToday = missions.filter(m => (m.checkins ?? []).includes(today)).length
   const total = missions.length
-  const progress = total > 0 ? Math.round((completed / total) * 100) : 0
+  const progress = total > 0 ? Math.round((doneToday / total) * 100) : 0
 
   return (
     <main className="page-container max-w-md mx-auto">
@@ -62,7 +63,7 @@ export default function HomePage() {
         <div className="glass rounded-2xl p-4 mb-5 animate-fade-in">
           <div className="flex items-center justify-between mb-2">
             <span className="text-xs font-bold text-slate-400">Weekly Progress</span>
-            <span className="text-sm font-black text-ice-300">{completed}/{total}</span>
+            <span className="text-sm font-black text-ice-300">{doneToday}/{total} today</span>
           </div>
           <div className="h-2 rounded-full overflow-hidden" style={{ background: 'rgba(56,189,248,0.1)' }}>
             <div
@@ -76,7 +77,7 @@ export default function HomePage() {
           </div>
           {progress === 100 && (
             <p className="text-center text-xs font-black text-ice-300 mt-2 animate-fade-in">
-              🏆 All missions complete — you crushed it!
+              🏆 All missions done today — you crushed it!
             </p>
           )}
         </div>
